@@ -1,0 +1,16 @@
+{
+	"_warning": "Telegram's own public values from Telegram-iOS (api_id 8, bundle ID ph.telegra.Telegraph): enough for a simulator build. Before you build for a device, replace api_id and api_hash with your own from https://my.telegram.org and bundle_id with your own, e.g. com.yourname.wraithgram.",
+	"bundle_id": "ph.telegra.Telegraph",
+	"api_id": "8",
+	"api_hash": "7245de8e747a0d6fbe11f7cc14fcc0bb",
+	"team_id": "C67CF9S4VU",
+	"app_center_id": "0",
+	"is_internal_build": "false",
+	"is_appstore_build": "false",
+	"appstore_id": "0",
+	"app_specific_url_scheme": "tg",
+	"premium_iap_product_id": "",
+	"enable_siri": false,
+	"enable_icloud": false,
+	"communication_notifications": false
+}
