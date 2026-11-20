@@ -1,10 +1,10 @@
 # Builds an IPA to re-sign on the device (build-system/WGBuildResign.sh) on a GitHub-hosted Mac.
 #
-# Run it in your own fork: Actions → "Build IPA for re-signing" → Run workflow. The IPA is uploaded as
+# Run it in your own fork: Actions тЖТ "Build IPA for re-signing" тЖТ Run workflow. The IPA is uploaded as
 # a workflow artifact (kept for a few days), never as a release. See docs/ios/building.md.
 #
 # Your keys: repository secrets TELEGRAM_API_ID and TELEGRAM_API_HASH (from https://my.telegram.org).
-# Without them the build uses Telegram's own public values from the template and warns about it.
+# This fork requires personal API credentials and encrypts artifacts to its local age recipient.
 #
 # Telegram is a large build and the standard runner is small (3 cores, 7 GB of memory): a test run on
 # xcode-27 took about 1 hour 20 minutes. The job stops after 6 hours.
@@ -38,6 +38,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Prepare artifact encryption
+        env:
+          ARTIFACT_RECIPIENT: ${{ vars.WG_ARTIFACT_RECIPIENT }}
+        run: |
+          test -n "$ARTIFACT_RECIPIENT" || { echo "::error::WG_ARTIFACT_RECIPIENT is missing"; exit 1; }
+          command -v age >/dev/null || brew install age
+          printf '' | age --encrypt --recipient "$ARTIFACT_RECIPIENT" >/dev/null
 
       - name: Select the Xcode from versions.json
         run: |
@@ -75,11 +83,12 @@ jobs:
           import json, os
           config = json.load(open("build-system/wraithgram-configuration.example.json"))
           config.pop("_warning", None)
-          if os.environ.get("API_ID") and os.environ.get("API_HASH"):
-              config["api_id"] = os.environ["API_ID"]
-              config["api_hash"] = os.environ["API_HASH"]
-          else:
-              print("::warning::TELEGRAM_API_ID / TELEGRAM_API_HASH secrets are not set: building with Telegram's own api_id 8.")
+          api_id = os.environ.get("API_ID", "").strip()
+          api_hash = os.environ.get("API_HASH", "").strip()
+          if not api_id.isdecimal() or api_id == "8" or len(api_hash) != 32 or any(c not in "0123456789abcdefABCDEF" for c in api_hash):
+              raise SystemExit("::error::Set valid personal TELEGRAM_API_ID and TELEGRAM_API_HASH secrets.")
+          config["api_id"] = api_id
+          config["api_hash"] = api_hash
           config["bundle_id"] = os.environ["BUNDLE_ID"].strip()
           json.dump(config, open("build-system/wraithgram-configuration.json", "w"), indent=2)
           PY
@@ -91,19 +100,39 @@ jobs:
           BUILD_NUMBER: ${{ inputs.build_number }}
         run: build-system/WGBuildResign.sh "$BUILD_NUMBER"
 
-      - name: Upload the IPA
+      - name: Encrypt the IPA
+        env:
+          ARTIFACT_RECIPIENT: ${{ vars.WG_ARTIFACT_RECIPIENT }}
+        run: |
+          age --encrypt --recipient "$ARTIFACT_RECIPIENT" \
+            --output "$RUNNER_TEMP/WraithGram.ipa.age" \
+            build-output/ipa/Wraithgram-for-resign.ipa
+
+      - name: Upload the encrypted IPA
         uses: actions/upload-artifact@v4
         with:
           name: Wraithgram-for-resign-${{ inputs.build_number }}
-          path: build-output/ipa/Wraithgram-for-resign.ipa
+          path: ${{ runner.temp }}/WraithGram.ipa.age
+          compression-level: 0
           retention-days: 3
           if-no-files-found: error
 
-      - name: Upload the build log
+      - name: Encrypt the build log
+        if: failure()
+        env:
+          ARTIFACT_RECIPIENT: ${{ vars.WG_ARTIFACT_RECIPIENT }}
+        run: |
+          if [ -f "$RUNNER_TEMP/wg-build.log" ]; then
+            age --encrypt --recipient "$ARTIFACT_RECIPIENT" \
+              --output "$RUNNER_TEMP/wg-build.log.age" "$RUNNER_TEMP/wg-build.log"
+          fi
+
+      - name: Upload the encrypted build log
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: build-log
-          path: ${{ runner.temp }}/wg-build.log
+          path: ${{ runner.temp }}/wg-build.log.age
+          compression-level: 0
           retention-days: 3
           if-no-files-found: ignore
