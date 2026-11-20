@@ -4,7 +4,8 @@
 # a workflow artifact (kept for a few days), never as a release. See docs/ios/building.md.
 #
 # Your keys: repository secrets TELEGRAM_API_ID and TELEGRAM_API_HASH (from https://my.telegram.org).
-# This fork requires personal API credentials and encrypts artifacts to its local age recipient.
+# Without the secrets, the build uses Telegram's public template values.
+# This fork encrypts artifacts to its local age recipient.
 #
 # Telegram is a large build and the standard runner is small (3 cores, 7 GB of memory): a test run on
 # xcode-27 took about 1 hour 20 minutes. The job stops after 6 hours.
@@ -89,10 +90,11 @@ jobs:
           config.pop("_warning", None)
           api_id = os.environ.get("API_ID", "").strip()
           api_hash = os.environ.get("API_HASH", "").strip()
-          if not api_id.isdecimal() or api_id == "8" or len(api_hash) != 32 or any(c not in "0123456789abcdefABCDEF" for c in api_hash):
-              raise SystemExit("::error::Set valid personal TELEGRAM_API_ID and TELEGRAM_API_HASH secrets.")
-          config["api_id"] = api_id
-          config["api_hash"] = api_hash
+          if api_id and api_hash:
+              config["api_id"] = api_id
+              config["api_hash"] = api_hash
+          else:
+              print("::warning::Building with Telegram's public template API credentials; device login is not guaranteed.")
           config["bundle_id"] = os.environ["BUNDLE_ID"].strip()
           json.dump(config, open("build-system/wraithgram-configuration.json", "w"), indent=2)
           PY
