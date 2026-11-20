@@ -25,6 +25,10 @@ on:
         description: "Runner label; it must have the Xcode version from versions.json"
         required: true
         default: "xcode-27"
+      include_vpn_core:
+        description: "Build and include the optional Wraithgram VPN core"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -92,6 +96,18 @@ jobs:
           config["bundle_id"] = os.environ["BUNDLE_ID"].strip()
           json.dump(config, open("build-system/wraithgram-configuration.json", "w"), indent=2)
           PY
+
+      - uses: actions/setup-go@v6
+        if: inputs.include_vpn_core
+        with:
+          go-version-file: Wraithgram/Features/Vless/Core/go/go.mod
+          cache: false
+
+      - name: Build the optional VPN core
+        if: inputs.include_vpn_core
+        run: |
+          bash Wraithgram/Features/Vless/Core/build-core.sh
+          test -s Wraithgram/Features/Vless/Core/build/ios_arm64/WGXrayCore.framework.zip
 
       - name: Build
         env:
